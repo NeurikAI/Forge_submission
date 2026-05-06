@@ -24,7 +24,6 @@ def draw_mask(image, mask, color, alpha=0.5):
 def main():
     args = get_args()
     model = YOLO(args.model)
-
     metrics = model.val(
         data=args.data,
         split=args.split,
@@ -40,6 +39,32 @@ def main():
     print(
         f"  MASK | mAP50: {metrics.seg.map50:.4f}  mAP50-95: {metrics.seg.map:.4f}"
     )
+    precision_box = metrics.box.mp
+    recall_box = metrics.box.mr
+    f1_box = 2 * (precision_box * recall_box) / (precision_box + recall_box + 1e-16)
+    precision_mask = metrics.seg.mp
+    recall_mask = metrics.seg.mr
+    f1_mask = 2 * (precision_mask * recall_mask) / (precision_mask + recall_mask + 1e-16)
+    print("\n--- Additional Metrics ---")
+    print(
+        f"  BOX  | Precision: {precision_box:.4f}  Recall: {recall_box:.4f}  F1: {f1_box:.4f}"
+    )
+    print(
+        f"  MASK | Precision: {precision_mask:.4f}  Recall: {recall_mask:.4f}  F1: {f1_mask:.4f}"
+    )
+    print("\n--- Per-class BOX metrics ---")
+    for i, name in metrics.names.items():
+        p = metrics.box.p[i] if metrics.box.p is not None else 0
+        r = metrics.box.r[i] if metrics.box.r is not None else 0
+        f1 = 2 * (p * r) / (p + r + 1e-16)
+        print(f"{name}: Precision={p:.4f}, Recall={r:.4f}, F1={f1:.4f}")
+
+    print("\n--- Per-class MASK metrics ---")
+    for i, name in metrics.names.items():
+        p = metrics.seg.p[i] if metrics.seg.p is not None else 0
+        r = metrics.seg.r[i] if metrics.seg.r is not None else 0
+        f1 = 2 * (p * r) / (p + r + 1e-16)
+        print(f"{name}: Precision={p:.4f}, Recall={r:.4f}, F1={f1:.4f}")
     with open(args.data) as f:
         cfg = yaml.safe_load(f)
     base_path = Path(cfg.get("path", ""))
@@ -52,7 +77,6 @@ def main():
             if p.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]
         ]
     )
-
     vis_dir = Path(metrics.save_dir) / "mask_visualizations"
     vis_dir.mkdir(parents=True, exist_ok=True)
     palette = np.random.default_rng(42).integers(
