@@ -45,21 +45,58 @@ opencv-python pillow pyyaml pandas tqdm
 
 ---
 
+## Important: Configuration Setup
+
+**BEFORE running any scripts, you MUST update the paths in these files:**
+
+1. **`fashion.yaml`** - Update the dataset paths:
+   ```yaml
+      path: fashion #in reference to the Data structure(yolo format)
+      train: images/train
+      val: images/train
+      test: images/test
+      nc: 1
+      names: [object]
+   ```
+
+2. **`train.py`** - Update any hardcoded paths in the script for:
+   - Dataset path (if different from fashion.yaml)
+   - Output directory for model weights
+   - Any other custom paths
+
+**Failing to update these paths will cause the scripts to fail or use incorrect data.**
+
+---
+
 ## Quick Start
 
 ### 1. Train the Model
+Before training, make sure `fashion.yaml` and `train.py` are properly configured with your dataset paths.
 
 ```bash
-python train.py
+python train.py 
 ```
 
-Default settings:
+**CRITICAL: Configuration (MUST edit in `train.py`):**
 
-* Epochs: 100
-* Image size: 640
-* Batch size: 16
-* Learning rate: 1e-3
-* Logging: Weights & Biases (W&B)
+**Required Changes:**
+* `data='path/to/fashion.yaml'` → **Change to your dataset YAML path** (REQUIRED)
+* `device=1` → **Change to your GPU ID** (REQUIRED - e.g., 0, 1, 2)
+* `name='...'` → **Change output directory name** (REQUIRED - used for saving weights)
+* `project='...'` → **Change W&B project name** (for logging)
+* `wandb.init(project="...")` → **Change W&B project** (must match above)
+
+**Optional Tuning:**
+* `epochs`: 100 (training iterations)
+* `imgsz`: 640 (input image size)
+* `batch`: 32 (batch size - reduce if CUDA OOM)
+* `lr0`: 1e-3 (learning rate)
+* `workers`: 16 (data loading workers)
+
+**Output Locations:**
+- Weights: `runs/segment/{project}/{name}/weights/best.pt`
+- Logs: Weights & Biases (W&B) dashboard
+- Plots: `runs/segment/{project}/{name}/`
 
 ---
 
@@ -131,9 +168,9 @@ python preferential_f1_score.py \
 | Metric | Meaning |
 |--------|---------|
 | **TP** | Correct detection of fashion item |
-| **TN** | Correct rejection of background |
-| **FP** | Incorrect detection (false alarm) |
-| **FN** | Missed fashion item |
+| **TN** | Correct rejection of background - areas with no fashion items are correctly identified as empty |
+| **FP** | Incorrect detection (false alarm) - background incorrectly marked as fashion item |
+| **FN** | Missed fashion item - fashion item present but not detected |
 
 ---
 
@@ -144,12 +181,12 @@ python preferential_f1_score.py \
 Edit `fashion.yaml`:
 
 ```yaml
-path: /path/to/fashion
-train: train.txt
-val: val.txt
-
+path: fashion #in reference to the Data structure(yolo format)
+train: images/train
+val : images/train
+test: images/test
 nc: 1
-names: ['fashion_item']
+names: ['object']
 ```
 
 **Dataset Structure (YOLO Format)**
@@ -262,6 +299,7 @@ runs/detect/fashion_fastsam/
 │   ├── TP/   # Correct detections
 │   ├── FP/   # False detections
 │   ├── FN/   # Missed objects
+│   └── TN/   # Correct background (no objects detected)
 ├── results.json
 └── scores.csv
 ```
@@ -273,6 +311,18 @@ output_dir/
 ├── TP/   # Correct depth-aware matches (side-by-side GT vs predictions)
 ├── FP/   # Wrong detections or depth selection errors
 ├── FN/   # Missed objects despite detection
+└── TN/   # Correct background (no objects detected)
+```
+
+---
+
+## Training Strategy
+
+
+**Phase 1: Fine-Tuning**
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python train.py
 ```
 
 ---
