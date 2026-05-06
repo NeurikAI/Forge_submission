@@ -316,18 +316,6 @@ output_dir/
 
 ---
 
-## Training Strategy
-
-
-**Phase 1: Fine-Tuning**
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python train.py
-```
-
----
-
-
 ## References
 
 * FastSAM: https://github.com/CASIA-IVA-Lab/FastSAM
