@@ -1,75 +1,69 @@
-# FastSAM Fine-tuning Pipeline
+# FastSAM Fine-tuning Pipeline (Fashion Segmentation)
 
-End-to-end pipeline for fine-tuning FastSAM (Fast Segment Anything Model) on polybag/fashion item segmentation. Includes data preparation, multi-phase training, and depth-aware evaluation.
+This provides an end-to-end pipeline to train, validate, and evaluate FastSAM for segmenting fashion items such as clothing packages.
 
-## Directory Structure
+It includes:
+
+* Training FastSAM on custom datasets
+* Evaluating segmentation performance using standard metrics
+* Depth-aware evaluation for improved object selection
+* Full classification metrics (TP, TN, FP, FN)
+* Visualization of predictions vs ground truth
+
+---
+
+## What This Pipeline Does
+
+This pipeline allows you to:
+
+* Train FastSAM on custom fashion datasets
+* Evaluate segmentation accuracy using mAP and classification metrics
+* Perform depth-aware evaluation for selecting correct objects in cluttered scenes
+* Compute TP, TN, FP, FN for full performance analysis
+* Generate visual outputs for debugging and inspection
+
+---
+
+## Pipeline Structure
 
 ```
 fastsam_finetuning/
-├── train.py                      # Main training script
-├── validate_fastsam.py           # Validation with metrics & visualizations
-├── preferential_f1_score.py      # Depth-aware evaluation (DepthPro + F1)
-├── fashion.yaml                  # YOLO dataset config
-└── data_handling/
-    ├── sam3_annotate.py          # Auto-annotation using SAM3
-    ├── coco_to_yolo.py           # COCO JSON to YOLO format
-    ├── rle_to_yolo.py            # RLE masks to YOLO format
-    ├── visual_test.py            # Verify COCO annotations
-    └── merge_datasets.py          # Merge phase 1 & phase 2 data
+├── train.py                  # Train FastSAM model
+├── validate_fastsam.py       # mAP evaluation + segmentation metrics
+├── preferential_f1_score.py  # Depth-aware evaluation (FastSAM + DepthPro)
+└── fashion.yaml              # Dataset configuration file
 ```
+
+---
 
 ## Installation
 
 ```bash
-pip install ultralytics wandb torch torchvision transformers opencv-python pillow pyyaml pandas tqdm
+pip install ultralytics wandb torch torchvision transformers \
+opencv-python pillow pyyaml pandas tqdm
 ```
 
-## Workflow
+---
 
-### 1. Prepare Data
+## Quick Start
 
-**From SAM3 (auto-annotation):**
-```bash
-python data_handling/sam3_annotate.py \
-    --img-folder /path/to/images \
-    --prompt "clear plastic wrapped clothing package"
-```
-
-**From COCO JSON:**
-```bash
-python data_handling/coco_to_yolo.py \
-    --coco-json annotations.json \
-    --output-lbls /path/to/labels
-```
-
-**From RLE masks (iMaterialist):**
-```bash
-python data_handling/rle_to_yolo.py --base-dir /path/to/dataset
-```
-
-**Verify annotations:**
-```bash
-python data_handling/visual_test.py \
-    --coco-json annotations.json \
-    --img-dir /path/to/images \
-    --out-dir /path/to/output
-```
-
-### 2. Train
+### 1. Train the Model
 
 ```bash
 python train.py
 ```
 
-Configuration in `train.py`:
-- `epochs`: 20
-- `imgsz`: 640
-- `batch`: 16
-- `lr0`: 1e-3
-- `device`: GPU ID
-- `workers`: 8
+Default settings:
 
-### 3. Validate
+* Epochs: 100
+* Image size: 640
+* Batch size: 16
+* Learning rate: 1e-3
+* Logging: Weights & Biases (W&B)
+
+---
+
+### 2. Validate Model Performance
 
 ```bash
 python validate_fastsam.py \
@@ -79,81 +73,179 @@ python validate_fastsam.py \
     --conf 0.3
 ```
 
-Output: mAP50, mAP50-95, mask visualizations
+#### Outputs
 
-### 4. Evaluate with Depth
+**Standard Metrics**
+* Precision
+* Recall
+* mAP50
+* mAP50-95
+
+---
+
+### 3. Depth-Aware Evaluation
+
+This step improves evaluation by using depth to select the most relevant object in cluttered scenes.
 
 ```bash
 python preferential_f1_score.py \
-    --root-dir /path/to/root/containing/scene_folders \
+    --root-dir /path/to/data \
     --output-dir /path/to/output \
     --weights best.pt \
     --depth-model-id apple/DepthPro-hf \
-    --conf 0.30 \
+    --conf 0.3 \
     --imgsz 1024 \
-    --iou-threshold 0.50
+    --iou-threshold 0.5
 ```
 
-Output: Precision, Recall, F1, TP/FP/FN counts, side-by-side GT vs prediction verification images in TP/ and FN/ folders
+**What it does:**
+1. Uses your trained FastSAM-s model to detect all fashion items in images
+2. Uses DepthPro (AI depth estimation) to determine which object is closest to the camera
+3. Selects the closest object as the "preferential" target
+4. Compares if the model correctly identified this preferential object
+5. Generates side-by-side verification images (Ground Truth vs Predictions)
 
-## Multi-Phase Training
+#### Outputs
 
-**Phase 1:** Pre-train on iMaterialist
-```bash
-python rle_to_yolo.py --base-dir /path/to/imaterialistic
-python train.py
-```
+**Classification Metrics**
+* **TP (True Positives)**: Correct detections with correct depth selection
+* **TN (True Negatives)**: Correct absence of object detection
+* **FP (False Positives)**: Wrong object selected or hallucinated detection
+* **FN (False Negatives)**: Missed target objects
 
-**Phase 2:** Fine-tune with new data
-```bash
-python data_handling/sam3_annotate.py --img-folder /new/images
-python data_handling/coco_to_yolo.py --coco-json annotations.json --output-lbls labels
-python data_handling/merge_datasets.py \
-    --p1-base /path/to/phase1 \
-    --new-base /path/to/phase2 \
-    --new-img /new/images \
-    --new-lbl /new/labels
-python train.py  # with updated data path
-```
+**Evaluation Scores**
+* Precision
+* Recall
+* F1 Score
+
+**Visual Outputs**
+* `TP/`: Correct GT vs prediction matches (green = preferential, orange = other objects)
+* `TN/`: Correct background (no objects detected)
+* `FP/`: Incorrect detections shown side-by-side
+* `FN/`: Missed detections highlighted
+
+---
+
+## Understanding Classification Metrics
+
+| Metric | Meaning |
+|--------|---------|
+| **TP** | Correct detection of fashion item |
+| **TN** | Correct rejection of background |
+| **FP** | Incorrect detection (false alarm) |
+| **FN** | Missed fashion item |
+
+---
 
 ## Dataset Configuration
 
+**For Training & Validation (YOLO Format)**
+
 Edit `fashion.yaml`:
+
 ```yaml
-path: /path/to/datasets/fashion
+path: /path/to/fashion
 train: train.txt
 val: val.txt
+
 nc: 1
 names: ['fashion_item']
 ```
 
-Expected structure:
+**Dataset Structure (YOLO Format)**
+
 ```
 fashion/
-├── images/train/  ├── val/
-├── labels/train/  ├── val/
-├── train.txt
-└── val.txt
+├── images/
+│   ├── train/
+│   │   ├── image1.jpg
+│   │   ├── image2.jpg
+│   │   └── ...
+│   └── val/
+│       ├── image1.jpg
+│       └── ...
+│
+├── labels/
+│   ├── train/
+│   │   ├── image1.txt      # YOLO format annotations
+│   │   ├── image2.txt
+│   │   └── ...
+│   └── val/
+│       ├── image1.txt
+│       └── ...
+│
+├── train.txt               # List of training image paths
+└── val.txt                 # List of validation image paths
 ```
 
-## Script Reference
-
-| Script | Purpose |
-|--------|---------|
-| `train.py` | Train FastSAM with W&B tracking |
-| `validate_fastsam.py` | Compute mAP50, mAP50-95, visualizations |
-| `preferential_f1_score.py` | Depth-aware F1 evaluation: FastSAM-s + DepthPro, selects closest object, generates side-by-side GT vs pred verification images |
-| `sam3_annotate.py` | Auto-annotation using SAM3 model |
-| `coco_to_yolo.py` | Convert COCO JSON to YOLO format |
-| `rle_to_yolo.py` | Convert RLE masks to YOLO format |
-| `visual_test.py` | Verify COCO annotations visually |
-| `merge_datasets.py` | Merge phase 1 and phase 2 datasets |
-
-## Output
-
-Training outputs saved to:
+**YOLO Format (.txt files):**
+Each `.txt` file contains annotations in the format:
 ```
-runs/segment/fashion_fastsam/fashion_finetune/
+<class_id> <x_center> <y_center> <width> <height>
+<class_id> <x_center> <y_center> <width> <height>
+...
+```
+
+Where coordinates are normalized (0-1) relative to image dimensions.
+
+---
+
+## Data Structure for Depth-Aware Evaluation
+
+**For preferential_f1_score.py**
+
+The evaluation expects a hierarchical directory structure with annotated test data:
+
+```
+VALIDATED_test_data_annotations/
+├── scene_name_1/
+│   ├── infer_0/
+│   │   ├── image.png                    # Test image
+│   │   ├── annotations.json             # Ground truth with "preferential": true/false
+│   │   └── depth_pro.npy                # DepthPro depth estimation (optional)
+│   ├── infer_1/
+│   └── infer_N/
+├── scene_name_2/
+│   └── infer_*/
+└── scene_name_N/
+    └── infer_*/
+```
+
+**Key files in each `infer_N/` folder:**
+- `image.png` or `image.jpg`: Test image
+- `annotations.json`: Ground truth annotations with `"preferential": true/false` field marking the closest object
+- `depth_pro.npy`: (Optional) Pre-computed depth from DepthPro
+
+**Example annotations.json format:**
+```json
+{
+  "annotations": [
+    {
+      "id": 1,
+      "segmentation": [[x1, y1, x2, y2, ...]],
+      "bbox": [x, y, width, height],
+      "area": 1234,
+      "preferential": true
+    },
+    {
+      "id": 2,
+      "segmentation": [[x1, y1, x2, y2, ...]],
+      "bbox": [x, y, width, height],
+      "area": 567,
+      "preferential": false
+    }
+  ]
+}
+```
+
+---
+
+## Outputs Overview
+
+### Training Output
+
+```
+runs/segment/fashion_fastsam/
 ├── weights/
 │   ├── best.pt
 │   ├── last.pt
@@ -162,37 +254,48 @@ runs/segment/fashion_fastsam/fashion_finetune/
 └── plots/
 ```
 
-Validation outputs saved to:
+### Validation Output (Standard Metrics)
+
 ```
 runs/detect/fashion_fastsam/
 ├── mask_visualizations/
-│   ├── TP/   # True Positives (correctly detected preferential objects)
-│   └── FN/   # False Negatives (missed preferential objects)
+│   ├── TP/   # Correct detections
+│   ├── FP/   # False detections
+│   ├── FN/   # Missed objects
 ├── results.json
 └── scores.csv
 ```
 
-Depth-aware evaluation outputs (from preferential_f1_score.py):
+### Depth Evaluation Output
+
 ```
 output_dir/
-├── TP/   # Side-by-side verification images (GT vs FastSAM+DepthPro) - correct matches
-└── FN/   # Side-by-side verification images - incorrect or missed matches
+├── TP/   # Correct depth-aware matches (side-by-side GT vs predictions)
+├── FP/   # Wrong detections or depth selection errors
+├── FN/   # Missed objects despite detection
 ```
 
-## Common Issues
+---
 
-- **CUDA OOM**: Reduce batch size or imgsz
-- **Slow loading**: Increase workers or enable cache
-- **Low scores**: Check data quality, adjust learning rate
-- **SAM3 crash**: Need >20GB GPU memory
-- **Missing masks**: Use `visual_test.py` to debug
+## Training Strategy
+
+
+**Phase 1: Fine-Tuning**
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python train.py
+```
+
+---
+
 
 ## References
 
-- FastSAM: https://github.com/CASIA-IVA-Lab/FastSAM
-- Ultralytics: https://docs.ultralytics.com/
-- DepthPro: https://huggingface.co/apple/DepthPro-hf
-- COCO Format: https://cocodataset.org/#format-data
+* FastSAM: https://github.com/CASIA-IVA-Lab/FastSAM
+* Ultralytics YOLO: https://docs.ultralytics.com/
+* DepthPro: https://huggingface.co/apple/DepthPro-hf
+* COCO Format: https://cocodataset.org/
 
 ---
+
 
