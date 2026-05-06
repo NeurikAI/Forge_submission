@@ -85,13 +85,16 @@ Output: mAP50, mAP50-95, mask visualizations
 
 ```bash
 python preferential_f1_score.py \
-    --img-dir /path/to/images \
-    --ann-dir /path/to/annotations \
+    --root-dir /path/to/root/containing/scene_folders \
+    --output-dir /path/to/output \
     --weights best.pt \
-    --iou-thresh 0.5
+    --depth-model-id apple/DepthPro-hf \
+    --conf 0.30 \
+    --imgsz 1024 \
+    --iou-threshold 0.50
 ```
 
-Output: Precision, Recall, F1, Accuracy, TP/FP/FN counts, visualizations
+Output: Precision, Recall, F1, TP/FP/FN counts, side-by-side GT vs prediction verification images in TP/ and FN/ folders
 
 ## Multi-Phase Training
 
@@ -139,7 +142,7 @@ fashion/
 |--------|---------|
 | `train.py` | Train FastSAM with W&B tracking |
 | `validate_fastsam.py` | Compute mAP50, mAP50-95, visualizations |
-| `preferential_f1_score.py` | Depth-aware F1 evaluation with DepthPro |
+| `preferential_f1_score.py` | Depth-aware F1 evaluation: FastSAM-s + DepthPro, selects closest object, generates side-by-side GT vs pred verification images |
 | `sam3_annotate.py` | Auto-annotation using SAM3 model |
 | `coco_to_yolo.py` | Convert COCO JSON to YOLO format |
 | `rle_to_yolo.py` | Convert RLE masks to YOLO format |
@@ -163,9 +166,17 @@ Validation outputs saved to:
 ```
 runs/detect/fashion_fastsam/
 ├── mask_visualizations/
-│   ├── TP/  ├── FP/  ├── FN/  ├── TN/
+│   ├── TP/   # True Positives (correctly detected preferential objects)
+│   └── FN/   # False Negatives (missed preferential objects)
 ├── results.json
 └── scores.csv
+```
+
+Depth-aware evaluation outputs (from preferential_f1_score.py):
+```
+output_dir/
+├── TP/   # Side-by-side verification images (GT vs FastSAM+DepthPro) - correct matches
+└── FN/   # Side-by-side verification images - incorrect or missed matches
 ```
 
 ## Common Issues
