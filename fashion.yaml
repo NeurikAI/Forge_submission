@@ -1,5 +1,7 @@
-path: /home/swethas/swetha/imaterialistic/datasets/fashion
-train: train.txt
-val: val.txt
-nc: 1
-names: ['fashion_item']
+path: fashion
+train: images/train
+val: images/train
+test: images/test
+
+names:
+  0: class_name
